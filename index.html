@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<title>ساعات الشغل</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column. Timer first, then three counter cards, then the day report. */
+:root{
+  --bg:#eef2f0; --surface:#ffffff; --surface-2:#e3eae7; --fg:#13201c; --muted:#56655f; --line:#cdd8d3;
+  --accent:#0b6b61; --on-accent:#ffffff;
+  --good:#13803f; --bad:#b42323; --warn:#a85a06;
+  --font-display:'Cairo',system-ui,sans-serif;
+  --font-body:'IBM Plex Sans Arabic',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1412; --surface:#151f1c; --surface-2:#1f2c28; --fg:#e7efec; --muted:#9bada6; --line:#2a3a35;
+    --accent:#3fc7b6; --on-accent:#06201c; --good:#4ade80; --bad:#f87171; --warn:#fbbf24;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1412; --surface:#151f1c; --surface-2:#1f2c28; --fg:#e7efec; --muted:#9bada6; --line:#2a3a35;
+  --accent:#3fc7b6; --on-accent:#06201c; --good:#4ade80; --bad:#f87171; --warn:#fbbf24;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-body); font-size:16px; line-height:1.55;
+  padding-block:20px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.app{max-width:560px; margin-inline:auto; display:flex; flex-direction:column; gap:14px}
+h1,h2,h3,h4{font-family:var(--font-display); margin:0; text-wrap:balance}
+button,input,select,textarea{font:inherit; color:inherit}
+:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
+.top{display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap}
+.top h1{font-size:26px; font-weight:800}
+.top .date{color:var(--muted); font-size:14px}
+.netline{text-align:left; font-size:13px; color:var(--muted)}
+.netline b{display:block; font-family:var(--font-display); font-size:20px; color:var(--fg); font-variant-numeric:tabular-nums}
+.netline b.neg{color:var(--bad)}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px}
+
+/* timer */
+.timer{display:flex; flex-direction:column; gap:14px; align-items:stretch}
+.pill{align-self:flex-start; display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--muted); background:var(--surface-2); padding:4px 12px; border-radius:99px}
+.pill i{width:9px; height:9px; border-radius:50%; background:var(--muted)}
+.pill[data-s="running"]{color:var(--good)} .pill[data-s="running"] i{background:var(--good); animation:pulse 1.4s ease-in-out infinite}
+.pill[data-s="paused"]{color:var(--warn)} .pill[data-s="paused"] i{background:var(--warn)}
+@keyframes pulse{50%{opacity:.35}}
+.clock{
+  direction:ltr; text-align:center; font-family:var(--font-display); font-weight:800;
+  font-size:clamp(46px, 15vw, 76px); line-height:1.05; letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;
+}
+.clock-sub{text-align:center; color:var(--muted); font-size:14px; margin-top:-6px}
+.row{display:flex; gap:10px; flex-wrap:wrap}
+.btn{
+  flex:1 1 140px; min-height:52px; padding:10px 18px; border-radius:10px; cursor:pointer;
+  border:1px solid var(--line); background:var(--surface-2); font-weight:600;
+}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+.btn.warn{background:transparent; color:var(--warn); border-color:var(--warn)}
+.btn.danger{background:transparent; color:var(--bad); border-color:var(--bad)}
+
+/* counters */
+.c-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:12px}
+.c-head h2{font-size:18px; font-weight:700}
+.total{font-family:var(--font-display); font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; direction:ltr}
+.total small{font-size:13px; font-weight:500; color:var(--muted); margin-inline-start:4px}
+.c-good .total{color:var(--good)} .c-bad .total{color:var(--bad)} .c-warn .total{color:var(--warn)}
+.quick{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin-bottom:12px}
+.chip{min-height:48px; border-radius:10px; border:1px solid var(--line); background:var(--surface-2); font-weight:700; cursor:pointer; font-variant-numeric:tabular-nums}
+.chip:active{background:var(--good); color:var(--bg)}
+.add{display:flex; gap:8px}
+.add input{
+  flex:1; min-width:0; min-height:48px; padding:8px 12px; border-radius:10px;
+  border:1px solid var(--line); background:var(--bg); font-size:17px; font-variant-numeric:tabular-nums;
+}
+.add input[aria-invalid="true"]{border-color:var(--bad)}
+.add .btn{flex:0 0 auto; min-height:48px; padding-inline:22px}
+.hint{font-size:13px; color:var(--bad); min-height:0; margin:6px 0 0}
+details{margin-top:10px}
+summary{cursor:pointer; color:var(--muted); font-size:14px; padding:6px 0}
+.log{list-style:none; margin:4px 0 0; padding:0; display:flex; flex-direction:column}
+.log li{display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-variant-numeric:tabular-nums}
+.log li span:first-child{color:var(--muted); font-size:13px; direction:ltr}
+.log li b{flex:1; font-weight:600}
+.log .del{min-width:44px; min-height:44px; border:0; background:transparent; color:var(--muted); font-size:20px; cursor:pointer; border-radius:8px}
+.log .del:hover{color:var(--bad)}
+.empty{color:var(--muted); font-size:14px; padding:6px 0}
+
+/* report */
+.rep-head{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+.rep-head h2{font-size:18px}
+.rep-head select{min-height:44px; padding:6px 10px; border-radius:10px; border:1px solid var(--line); background:var(--bg); max-width:100%}
+.rep h3{font-size:17px; margin-bottom:10px}
+.rep h4{font-size:15px; margin:14px 0 4px; color:var(--muted)}
+.sum{width:100%; border-collapse:collapse}
+.sum th,.sum td{padding:9px 0; border-bottom:1px solid var(--line); text-align:start; font-weight:500}
+.sum td{text-align:left; direction:ltr; font-weight:700; font-variant-numeric:tabular-nums}
+.sum .net th,.sum .net td{font-family:var(--font-display); font-size:19px; border-bottom:0; padding-top:12px}
+.rep ul{margin:0; padding:0; list-style:none}
+.rep li{display:flex; justify-content:space-between; gap:12px; padding:5px 0; font-size:15px; font-variant-numeric:tabular-nums}
+.rep li span:last-child{direction:ltr}
+.rep .none{color:var(--muted); font-size:14px}
+.copybox{width:100%; min-height:140px; margin-top:10px; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--bg); font-size:14px}
+.toast{
+  position:fixed; inset-inline:0; bottom:calc(20px + env(safe-area-inset-bottom, 0px)); margin-inline:auto; width:max-content; max-width:90%;
+  background:var(--fg); color:var(--bg); padding:10px 18px; border-radius:10px; font-weight:600; font-size:15px; z-index:20;
+}
+#printRoot{display:none}
+@media print{
+  body{background:#fff!important; padding:0}
+  body.printing .app, body.printing .toast{display:none!important}
+  body.printing #printRoot{display:block}
+  body:not(.printing) #printRoot{display:none}
+  #printRoot, #printRoot *{color:#000!important; background:#fff!important; border-color:#999!important}
+  #printRoot h1{font-size:22px; margin:0 0 12px}
+  #printRoot .rep{break-inside:avoid; page-break-inside:avoid; margin-bottom:22px; padding-bottom:12px; border-bottom:2px solid #000}
+}
+@media (prefers-reduced-motion: reduce){ .pill i{animation:none!important} }
+</style>
+
+<div class="app" dir="rtl" lang="ar">
+  <header class="top">
+    <div>
+      <h1>ساعات الشغل</h1>
+      <div class="date" id="today"></div>
+    </div>
+    <div class="netline">صافي اليوم<b id="netTop">0</b></div>
+  </header>
+
+  <section class="card timer" aria-label="ساعة الشغل">
+    <span class="pill" id="pill" data-s="idle"><i></i><span id="pillText">جاهز</span></span>
+    <div class="clock" id="clock" role="timer" aria-live="off">00:00:00</div>
+    <div class="clock-sub" id="clockSub"></div>
+    <div class="row">
+      <button class="btn primary" id="bStart" type="button">ابدأ الشغل</button>
+      <button class="btn warn" id="bPause" type="button" hidden>إيقاف مؤقت</button>
+      <button class="btn primary" id="bResume" type="button" hidden>استئناف</button>
+      <button class="btn danger" id="bStop" type="button" hidden>إنهاء الشغل</button>
+    </div>
+  </section>
+
+  <div id="counters" style="display:contents"></div>
+
+  <section class="card" aria-label="التقرير اليومي">
+    <div class="rep-head">
+      <h2>التقرير اليومي</h2>
+      <select id="repDay" aria-label="اختار اليوم"></select>
+    </div>
+    <div id="repView"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" id="bCopy" type="button">نسخ التقرير</button>
+      <button class="btn" id="bPrintOne" type="button" hidden>طباعة هذا اليوم</button>
+      <button class="btn" id="bPrintAll" type="button" hidden>طباعة كل التقارير</button>
+    </div>
+    <textarea class="copybox" id="copyBox" readonly hidden aria-label="نص التقرير"></textarea>
+  </section>
+</div>
+<div id="printRoot" dir="rtl" lang="ar"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+  var STANDALONE = true;
+  var KEY = 'wt_v1';
+  var QUICK = [5,10,15,20,25,30,35,40,50];
+  var CS = [
+    {id:'profit', name:'عداد الربح', tone:'good', quick:true},
+    {id:'expense', name:'عداد الإنفاق', tone:'bad'},
+    {id:'maint', name:'عداد الصيانة', tone:'warn'}
+  ];
+  function $(id){return document.getElementById(id)}
+  function pad(n){return String(n).padStart(2,'0')}
+  function dkey(d){d=d||new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+
+  var S;
+  function fresh(){return {days:{}, timer:{status:'idle', startedAt:0, acc:0, t0:0, day:null}}}
+  try{
+    var raw = localStorage.getItem(KEY);
+    S = raw ? JSON.parse(raw) : fresh();
+    if(!S || !S.days || !S.timer) S = fresh();
+  }catch(e){ S = fresh(); }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+  function day(k){
+    if(!S.days[k]) S.days[k] = {sessions:[], profit:[], expense:[], maint:[]};
+    return S.days[k];
+  }
+
+  function fmtMoney(n){ return Number(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
+  function fmtClock(ms){
+    var s = Math.floor(ms/1000);
+    return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60);
+  }
+  function fmtDur(ms){
+    var m = Math.round(ms/60000), h = Math.floor(m/60); m = m%60;
+    if(!h && !m) return ms>0 ? 'أقل من دقيقة' : '0 دقيقة';
+    if(h && m) return h+' ساعة و '+m+' دقيقة';
+    return h ? h+' ساعة' : m+' دقيقة';
+  }
+  function hm(t){var d=new Date(t); return pad(d.getHours())+':'+pad(d.getMinutes());}
+  function dayLabel(k){
+    var p = k.split('-');
+    return new Date(+p[0], +p[1]-1, +p[2]).toLocaleDateString('ar-EG-u-nu-latn',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  }
+  function sum(arr){ return arr.reduce(function(a,e){return a+e.v},0); }
+  function totals(k){
+    var d = S.days[k] || {sessions:[],profit:[],expense:[],maint:[]};
+    var p = sum(d.profit), x = sum(d.expense), m = sum(d.maint);
+    return {ms:d.sessions.reduce(function(a,s){return a+s.ms},0), n:d.sessions.length, p:p, x:x, m:m, net:Math.round((p-x-m)*100)/100, d:d};
+  }
+
+  /* timer */
+  function elapsed(){
+    var t = S.timer;
+    return t.acc + (t.status==='running' ? Date.now()-t.startedAt : 0);
+  }
+  var wl = null;
+  function lock(){ try{ if('wakeLock' in navigator && !wl){ navigator.wakeLock.request('screen').then(function(l){wl=l; l.addEventListener('release',function(){wl=null})}).catch(function(){wl=null}); } }catch(e){} }
+  function unlock(){ try{ if(wl) wl.release(); }catch(e){} wl=null; }
+
+  function renderControls(){
+    var st = S.timer.status;
+    $('bStart').hidden = st!=='idle';
+    $('bPause').hidden = st!=='running';
+    $('bResume').hidden = st!=='paused';
+    $('bStop').hidden = st==='idle';
+    $('pill').setAttribute('data-s', st);
+    $('pillText').textContent = st==='running' ? 'شغال' : st==='paused' ? 'متوقف مؤقتًا' : 'جاهز';
+  }
+  function renderClock(){
+    $('clock').textContent = fmtClock(elapsed());
+  }
+  function renderSub(){
+    var t = totals(dkey());
+    $('clockSub').textContent = t.n ? 'المسجل اليوم: '+fmtDur(t.ms)+' ('+t.n+(t.n===1?' جلسة':' جلسات')+')' : 'لسه مفيش جلسات اتسجلت النهارده';
+  }
+  $('bStart').onclick = function(){
+    var now = Date.now();
+    S.timer = {status:'running', startedAt:now, acc:0, t0:now, day:dkey()};
+    save(); lock(); renderControls(); renderClock();
+  };
+  $('bPause').onclick = function(){
+    var t = S.timer; t.acc += Date.now()-t.startedAt; t.status='paused';
+    save(); unlock(); renderControls(); renderClock();
+  };
+  $('bResume').onclick = function(){
+    S.timer.startedAt = Date.now(); S.timer.status='running';
+    save(); lock(); renderControls(); renderClock();
+  };
+  $('bStop').onclick = function(){
+    var t = S.timer, ms = elapsed(), k = t.day || dkey();
+    if(ms>0) day(k).sessions.push({start:t.t0, end:Date.now(), ms:ms});
+    S.timer = {status:'idle', startedAt:0, acc:0, t0:0, day:null};
+    save(); unlock(); renderControls(); renderClock(); refresh(); toast('تم حفظ الجلسة: '+fmtDur(ms));
+  };
+
+  /* counters */
+  function buildCounters(){
+    $('counters').innerHTML = CS.map(function(c){
+      var quick = c.quick ? '<div class="quick">'+QUICK.map(function(v){
+        return '<button class="chip" type="button" data-c="'+c.id+'" data-v="'+v+'">+'+v+'</button>';
+      }).join('')+'</div>' : '';
+      return '<section class="card c-'+c.tone+'">'+
+        '<div class="c-head"><h2>'+c.name+'</h2><div class="total"><span id="t-'+c.id+'">0</span><small>جنيه</small></div></div>'+
+        quick+
+        '<form class="add" data-c="'+c.id+'" novalidate>'+
+          '<input id="in-'+c.id+'" inputmode="decimal" autocomplete="off" placeholder="'+(c.quick?'مبلغ تاني':'اكتب المبلغ')+'" aria-label="'+c.name+'">'+
+          '<button class="btn primary" type="submit">إضافة</button>'+
+        '</form>'+
+        '<p class="hint" id="h-'+c.id+'" role="alert"></p>'+
+        '<details id="d-'+c.id+'"><summary>العمليات (<span id="n-'+c.id+'">0</span>)</summary><ul class="log" id="l-'+c.id+'"></ul></details>'+
+      '</section>';
+    }).join('');
+  }
+  function parseAmount(s){
+    s = String(s).replace(/[٠-٩]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.indexOf(d)}).replace(/[٫,،]/g,'.').trim();
+    if(!/^\d*\.?\d+$/.test(s)) return NaN;
+    return Math.round(parseFloat(s)*100)/100;
+  }
+  function addEntry(id, v){
+    day(dkey())[id].push({t:Date.now(), v:v});
+    save(); refresh();
+  }
+  document.addEventListener('submit', function(e){
+    var f = e.target; if(!f.classList.contains('add')) return;
+    e.preventDefault();
+    var id = f.getAttribute('data-c'), inp = $('in-'+id), hint = $('h-'+id);
+    var v = parseAmount(inp.value);
+    if(!(v>0)){
+      inp.setAttribute('aria-invalid','true');
+      hint.textContent = 'اكتب رقم أكبر من صفر، مثلًا 10 أو 12.5';
+      inp.focus(); return;
+    }
+    inp.removeAttribute('aria-invalid'); hint.textContent='';
+    inp.value=''; addEntry(id, v);
+  });
+  document.addEventListener('input', function(e){
+    if(e.target.id && e.target.id.indexOf('in-')===0){
+      e.target.removeAttribute('aria-invalid'); $('h-'+e.target.id.slice(3)).textContent='';
+    }
+  });
+  document.addEventListener('click', function(e){
+    var chip = e.target.closest('.chip');
+    if(chip){ addEntry(chip.getAttribute('data-c'), +chip.getAttribute('data-v')); return; }
+    var del = e.target.closest('.del');
+    if(del){
+      var id = del.getAttribute('data-c'), t = +del.getAttribute('data-t');
+      var arr = day(dkey())[id];
+      var i = arr.findIndex(function(x){return x.t===t});
+      if(i>-1){ arr.splice(i,1); save(); refresh(); }
+    }
+  });
+
+  function renderCounters(){
+    var d = day(dkey());
+    CS.forEach(function(c){
+      var arr = d[c.id];
+      $('t-'+c.id).textContent = fmtMoney(sum(arr));
+      $('n-'+c.id).textContent = arr.length;
+      $('l-'+c.id).innerHTML = arr.length ? arr.slice().reverse().map(function(x){
+        return '<li><span>'+hm(x.t)+'</span><b>'+fmtMoney(x.v)+' جنيه</b><button class="del" type="button" data-c="'+c.id+'" data-t="'+x.t+'" aria-label="مسح العملية">×</button></li>';
+      }).join('') : '<li class="empty">لسه مفيش عمليات</li>';
+    });
+    var t = totals(dkey());
+    var nb = $('netTop'); nb.textContent = fmtMoney(t.net)+' جنيه'; nb.className = t.net<0 ? 'neg' : '';
+  }
+
+  /* report */
+  function allKeys(){
+    var ks = Object.keys(S.days).filter(function(k){
+      var t = totals(k); return t.n || t.d.profit.length || t.d.expense.length || t.d.maint.length;
+    });
+    if(ks.indexOf(dkey())<0) ks.push(dkey());
+    return ks.sort().reverse();
+  }
+  function listHTML(arr, fn){
+    return arr.length ? '<ul>'+arr.map(fn).join('')+'</ul>' : '<div class="none">لا يوجد</div>';
+  }
+  function reportHTML(k){
+    var t = totals(k), d = t.d;
+    var money = function(x){return '<li><span>'+hm(x.t)+'</span><span>'+fmtMoney(x.v)+' جنيه</span></li>'};
+    return '<section class="rep">'+
+      '<h3>'+dayLabel(k)+'</h3>'+
+      '<table class="sum"><tbody>'+
+        '<tr><th>مدة الشغل</th><td>'+fmtDur(t.ms)+'</td></tr>'+
+        '<tr><th>عدد الجلسات</th><td>'+t.n+'</td></tr>'+
+        '<tr><th>الربح</th><td>'+fmtMoney(t.p)+' جنيه</td></tr>'+
+        '<tr><th>الإنفاق</th><td>'+fmtMoney(t.x)+' جنيه</td></tr>'+
+        '<tr><th>الصيانة</th><td>'+fmtMoney(t.m)+' جنيه</td></tr>'+
+        '<tr class="net"><th>الصافي (ربح - إنفاق - صيانة)</th><td>'+fmtMoney(t.net)+' جنيه</td></tr>'+
+      '</tbody></table>'+
+      '<h4>جلسات الشغل</h4>'+listHTML(d.sessions, function(s){return '<li><span>من '+hm(s.start)+' إلى '+hm(s.end)+'</span><span>'+fmtDur(s.ms)+'</span></li>'})+
+      '<h4>عمليات الربح</h4>'+listHTML(d.profit, money)+
+      '<h4>عمليات الإنفاق</h4>'+listHTML(d.expense, money)+
+      '<h4>عمليات الصيانة</h4>'+listHTML(d.maint, money)+
+    '</section>';
+  }
+  function reportText(k){
+    var t = totals(k), d = t.d, L = [];
+    L.push('تقرير يوم '+dayLabel(k));
+    L.push('مدة الشغل: '+fmtDur(t.ms)+' ('+t.n+' جلسات)');
+    L.push('الربح: '+fmtMoney(t.p)+' جنيه');
+    L.push('الإنفاق: '+fmtMoney(t.x)+' جنيه');
+    L.push('الصيانة: '+fmtMoney(t.m)+' جنيه');
+    L.push('الصافي: '+fmtMoney(t.net)+' جنيه');
+    if(d.sessions.length){ L.push('', 'الجلسات:'); d.sessions.forEach(function(s){L.push('- من '+hm(s.start)+' إلى '+hm(s.end)+' = '+fmtDur(s.ms))}); }
+    [['profit','عمليات الربح'],['expense','عمليات الإنفاق'],['maint','عمليات الصيانة']].forEach(function(p){
+      if(d[p[0]].length){ L.push('', p[1]+':'); d[p[0]].forEach(function(x){L.push('- '+hm(x.t)+'  '+fmtMoney(x.v)+' جنيه')}); }
+    });
+    return L.join('\n');
+  }
+  var repKey = dkey();
+  function renderReport(){
+    var ks = allKeys();
+    if(ks.indexOf(repKey)<0) repKey = ks[0];
+    $('repDay').innerHTML = ks.map(function(k){
+      return '<option value="'+k+'"'+(k===repKey?' selected':'')+'>'+(k===dkey()?'النهارده — ':'')+dayLabel(k)+'</option>';
+    }).join('');
+    $('repView').innerHTML = reportHTML(repKey);
+    $('copyBox').hidden = true;
+  }
+  $('repDay').onchange = function(){ repKey = this.value; renderReport(); };
+
+  $('bCopy').onclick = function(){
+    var text = reportText(repKey), box = $('copyBox');
+    function fallback(){ box.value = text; box.hidden = false; box.focus(); box.select(); toast('انسخ النص المحدد'); }
+    try{
+      navigator.clipboard.writeText(text).then(function(){ toast('تم نسخ التقرير'); }, fallback);
+    }catch(e){ fallback(); }
+  };
+  function doPrint(html){
+    $('printRoot').innerHTML = html;
+    document.body.classList.add('printing');
+    window.print();
+  }
+  window.addEventListener('afterprint', function(){ document.body.classList.remove('printing'); });
+  if(STANDALONE){
+    $('bPrintOne').hidden = false; $('bPrintAll').hidden = false;
+    $('bPrintOne').onclick = function(){ doPrint('<h1>تقرير ساعات الشغل</h1>'+reportHTML(repKey)); };
+    $('bPrintAll').onclick = function(){ doPrint('<h1>تقارير ساعات الشغل</h1>'+allKeys().map(reportHTML).join('')); };
+  }
+
+  var tt;
+  function toast(msg){
+    var el = $('toast'); el.textContent = msg; el.hidden = false;
+    clearTimeout(tt); tt = setTimeout(function(){ el.hidden = true; }, 2200);
+  }
+
+  function refresh(){ renderCounters(); renderSub(); renderReport(); }
+
+  /* start */
+  $('today').textContent = dayLabel(dkey());
+  buildCounters();
+  renderControls(); renderClock(); refresh();
+  if(S.timer.status==='running') lock();
+  var curKey = dkey();
+  setInterval(function(){
+    if(S.timer.status==='running') renderClock();
+    if(dkey()!==curKey){ curKey = dkey(); $('today').textContent = dayLabel(curKey); repKey = curKey; refresh(); }
+  }, 250);
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden){ renderClock(); if(S.timer.status==='running') lock(); }
+  });
+})();
+</script>
+
+</body></html>
